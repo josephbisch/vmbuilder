@@ -127,7 +127,7 @@ class Disk(object):
         """
         logging.info('Creating loop devices corresponding to the created partitions')
         self.vm.add_clean_cb(lambda : self.unmap(ignore_fail=True))
-        kpartx_output = run_cmd('kpartx', '-av', self.filename)
+        kpartx_output = run_cmd('kpartx', '-asv', self.filename)
         parts = []
         for line in kpartx_output.split('\n'):
             if line == "" or line.startswith("gpt:") or line.startswith("dos:"):
@@ -406,6 +406,7 @@ class Filesystem(object):
         self.vm.cancel_cleanup(self.umount)
         if (self.type != TYPE_SWAP) and not self.dummy:
             logging.debug('Unmounting %s', self.mntpath) 
+            run_cmd('sleep', '10')
             run_cmd('umount', self.mntpath)
 
     def get_suffix(self):
