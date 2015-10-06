@@ -32,7 +32,7 @@ class Potato(suite.Suite):
     valid_flavours = { 'i386' :  ['486', '586', '686-pae'],
                        'amd64' : ['amd64']}
     default_flavour = { 'i386' : '686-pae', 'amd64' : 'amd64' }
-    disk_prefix = 'hd'
+    disk_prefix = 'sd'
     xen_kernel_flavour = None
     virtio_net = False
     chpasswd_cmd = [ 'chpasswd', '--md5' ]
@@ -214,8 +214,9 @@ class Potato(suite.Suite):
         self.run_in_target('grub-set-default', '0')
 
     def mangle_grub_menu_lst(self, disks):
+        rootdev = disk.rootpart(disks)
         bootdev = disk.bootpart(disks)
-        run_cmd('sed', '-ie', 's/^# kopt=root=\([^ ]*\)\(.*\)/# kopt=root=\/dev\/sd%s%d\\2/g' % (bootdev.disk.devletters(), bootdev.get_index()+1), '%s/boot/grub/menu.lst' % self.context.chroot_dir)
+        run_cmd('sed', '-ie', 's/^# kopt=root=\([^ ]*\)\(.*\)/# kopt=root=UUID=%s rw/g' % rootdev.fs.uuid, '%s/boot/grub/menu.lst' % self.context.chroot_dir)
         run_cmd('sed', '-ie', 's/^# groot.*/# groot=(hd0,0)/g', '%s/boot/grub/menu.lst' % self.context.chroot_dir)
         run_cmd('sed', '-ie', '/^# kopt_2_6/ d', '%s/boot/grub/menu.lst' % self.context.chroot_dir)
 
@@ -244,8 +245,16 @@ class Potato(suite.Suite):
         if proxy is not None:
             self.context.install_file('/etc/apt/apt.conf', '// Proxy added by vmbuilder\nAcquire::http { Proxy "%s"; };' % proxy)
 
-    def install_fstab(self, disks, filesystems):
-        self.install_from_template('/etc/fstab', 'potato_fstab', { 'parts' : disk.get_ordered_partitions(disks), 'prefix' : self.disk_prefix })
+    def fstab(self):
+        retval = '''# /etc/fstab: static file system information.
+#
+# <file system>                                 <mount point>   <type>  <options>       <dump>  <pass>
+proc                                            /proc           proc    defaults        0       0
+'''
+        parts = disk.get_ordered_partitions(self.context.disks)
+        for part in parts:
+            retval += "UUID=%-40s %15s %7s %15s %d       %d\n" % (part.fs.uuid, part.fs.mntpnt, part.fs.fstab_fstype(), part.fs.fstab_options(), 0, 0)
+        return retval
 
     def install_device_map(self):
         self.install_from_template('/boot/grub/device.map', 'devicemap', { 'prefix' : self.disk_prefix })
